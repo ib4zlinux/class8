@@ -1,0 +1,94 @@
+---
+title: 'Personal Activity Efficacy: Personal Activity Device Data Analysis'
+author: "Robert Green"
+date: "01/05/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. This project will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). [^1]
+
+[^1]: Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+Cited by 2 (Google Scholar)
+
+The data has been downloaded from the website and save as 'pml-training.csv' and 'pml-testin.csv', respectively.
+
+## Prepare data for analysis
+
+``` {r trainingDataLoad, message = FALSE}
+library(caret); library(kernlab); library(RANN); library(randomForest); library(stringr)
+train.data <- read.csv('pml-training.csv')
+dim(train.data)
+str(train.data, list.len=20)
+```
+We can see the training dataset consists of 160 variables across 19,622 observations. 
+
+Looking specifically at our response variable 'classe', we see it is a factor.
+``` {r factor_classe}
+str(train.data$classe)
+```
+
+Let's also eliminate the timestamp columns, assuming that time-of-day did not influence it the excercises were done correctly, and any columns that are 'summary'-type (i.e., average) columns.
+``` {r eliminate_TOD_vars}
+col_list <- colnames(train.data)
+rem_col_list <- col_list[ str_detect( col_list, "(var|stddev|avg)" ) ]
+rem_col_list <- c(rem_col_list, "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp")
+train.data.noTOD <- train.data[ !col_list %in% rem_col_list]
+rm(train.data)
+```
+
+There are also quite a few columns that are mostly blank, so let's eliminate those as well. Turns out they are factor columns, so I will eliminate all columns that are of type "factor" with the exception of classe.
+```{r remove_factor_cols, results = 'hide'}
+use_col <- NULL
+for (col_name in col_list)
+{ if (is.numeric( train.data.noTOD [[ col_name ]] ) == T | is.integer ( train.data.noTOD [[ col_name ]] ) == T )
+use_col <- append(col_name, use_col)}
+use_col <- c(use_col, "classe")
+train.data.tidy <- train.data.noTOD[ , use_col]
+rm(train.data.noTOD)
+gc()
+```
+
+As there are NAs in several of the remaining variables, I will impute using knnInpute:
+``` {r knnImpute, results = 'hide'}
+num_of_cols <- ncol(train.data.tidy) - 1
+preProc <- preProcess (train.data.tidy[ , 1 : num_of_cols ], method = "knnImpute")
+train.data.noNA <- predict(preProc, train.data.tidy)
+rm(train.data.tidy)
+gc()
+```
+
+## Analysis
+To apply cross-validation, I will use k-folds. Defining a control:
+``` {r control}
+set.seed(32323)
+control <- trainControl(method = "cv", number = 5)
+```
+
+Start with a random forest model to train the prediction model using the k-folds control:
+``` {r rf_mod, results = 'hide'}
+rf_mod <- train(classe ~ ., data = train.data.noNA, method="rf", trControl = control)
+gc()
+``` 
+
+Build a gbm model for comparison:
+``` {r gbm_mod_1, message = FALSE, results = 'hide'}
+gbm_mod <- train(classe ~ ., data = train.data.noNA, method="gbm", trControl = control)
+gc()
+``` 
+
+## Conclusions
+Looking at the two models:
+``` {r compare}
+rf_mod
+gbm_mod
+```
+
+I would use the random forest method for the testing data to predict the results.  This is based on the better predicted performance of the random forest model than the gbm model.
+
