@@ -34,33 +34,33 @@ Looking specifically at our response variable 'classe', we see it is a factor.
 str(train.data$classe)
 ```
 
-Let's also eliminate the timestamp columns, assuming that time-of-day did not influence it the excercises were done correctly, and any columns that are 'summary'-type (i.e., average) columns.
+Let's also eliminate the timestamp and name columns, assuming that time-of-day did not influence it the excercises were done correctly, and any columns that are 'summary'-type (i.e., average) columns.
 ``` {r eliminate_TOD_vars}
 col_list <- colnames(train.data)
-rem_col_list <- col_list[ str_detect( col_list, "(var|stddev|avg)" ) ]
-rem_col_list <- c(rem_col_list, "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp")
+rem_col_list <- col_list[ str_detect( col_list, "(var|stddev|avg|total)" ) ]
+rem_col_list <- c(rem_col_list, "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "user_name", "X", "num_window")
 train.data.noTOD <- train.data[ !col_list %in% rem_col_list]
-rm(train.data)
 ```
 
 There are also quite a few columns that are mostly blank, so let's eliminate those as well. Turns out they are factor columns, so I will eliminate all columns that are of type "factor" with the exception of classe.
 ```{r remove_factor_cols, results = 'hide'}
+## dat[, -which(colMeans(is.na(dat)) > 0.5)]
 use_col <- NULL
 for (col_name in col_list)
 { if (is.numeric( train.data.noTOD [[ col_name ]] ) == T | is.integer ( train.data.noTOD [[ col_name ]] ) == T )
 use_col <- append(col_name, use_col)}
-use_col <- c(use_col, "classe")
-train.data.tidy <- train.data.noTOD[ , use_col]
-rm(train.data.noTOD)
-gc()
+use_col2 <- c(use_col, "classe")
+train.data.tidy <- train.data.noTOD[ , use_col2]
+```
+Columns that have more than 50% NA values are not going to give much guidance. I will eliminate them as well:
+``` {r rem_col_NA}
+train.data.noNA <- train.data.tidy[, -which(colMeans(is.na(train.data.tidy)) > 0.5)]
 ```
 
-As there are NAs in several of the remaining variables, I will impute using knnInpute:
-``` {r knnImpute, results = 'hide'}
-num_of_cols <- ncol(train.data.tidy) - 1
-preProc <- preProcess (train.data.tidy[ , 1 : num_of_cols ], method = "knnImpute")
-train.data.noNA <- predict(preProc, train.data.tidy)
-rm(train.data.tidy)
+Clean up unused data and run garbage collection:
+``` {r clean_up_time}
+rm(train.data)
+rm(train.data.noTOD)
 gc()
 ```
 
@@ -83,7 +83,7 @@ gbm_mod <- train(classe ~ ., data = train.data.noNA, method="gbm", trControl = c
 gc()
 ``` 
 
-## Conclusions
+## Data Analysis Conclusions
 Looking at the two models:
 ``` {r compare}
 rf_mod
@@ -92,3 +92,18 @@ gbm_mod
 
 I would use the random forest method for the testing data to predict the results.  This is based on the better predicted performance of the random forest model than the gbm model.
 
+## Application
+I now need to pull in the test data and perform the same data clean up operations, and apply the model to the test data to predict the manner in which the subjects did the exercise. For sake of brevity, the r code is shown in one block, and is essentially the same clean up done for the training data.
+```{r test_data_cleanup}
+test.data <- read.csv('pml-testing.csv')
+test.data.noTOD <- test.data[ !col_list %in% rem_col_list]
+test.data.tidy <- test.data.noTOD[ , use_col]
+test.data.noNA <- test.data.tidy[, -which(colMeans(is.na(train.data.tidy)) > 0.5)]
+```
+
+Applying the rf_mod to the testing data:
+```{r pred}
+predictions <- predict(rf_mod, test.data.noNA)
+answers <- data.frame(predictions)
+answers
+```
