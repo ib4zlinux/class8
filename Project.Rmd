@@ -34,7 +34,7 @@ Looking specifically at our response variable 'classe', we see it is a factor.
 str(train.data$classe)
 ```
 
-Let's also eliminate the timestamp and name columns, assuming that time-of-day did not influence it the excercises were done correctly, and any columns that are 'summary'-type (i.e., average) columns.
+Eliminate the observation id, timestamp and name columns, assuming these do not influence whether or not the excercises were done correctly, and any columns that are 'summary'-type (i.e., average) columns.
 ``` {r eliminate_TOD_vars}
 col_list <- colnames(train.data)
 rem_col_list <- col_list[ str_detect( col_list, "(var|stddev|avg|total)" ) ]
@@ -42,9 +42,8 @@ rem_col_list <- c(rem_col_list, "raw_timestamp_part_1", "raw_timestamp_part_2", 
 train.data.noTOD <- train.data[ !col_list %in% rem_col_list]
 ```
 
-There are also quite a few columns that are mostly blank, so let's eliminate those as well. Turns out they are factor columns, so I will eliminate all columns that are of type "factor" with the exception of classe.
+Non-numeric columns are not going to assist in predicting the outcome, so I will eliminate all columns that are not of type 'integer' or type 'numeric' with the exception of classe.
 ```{r remove_factor_cols, results = 'hide'}
-## dat[, -which(colMeans(is.na(dat)) > 0.5)]
 use_col <- NULL
 for (col_name in col_list)
 { if (is.numeric( train.data.noTOD [[ col_name ]] ) == T | is.integer ( train.data.noTOD [[ col_name ]] ) == T )
@@ -52,6 +51,7 @@ use_col <- append(col_name, use_col)}
 use_col2 <- c(use_col, "classe")
 train.data.tidy <- train.data.noTOD[ , use_col2]
 ```
+
 Columns that have more than 50% NA values are not going to give much guidance. I will eliminate them as well:
 ``` {r rem_col_NA}
 train.data.noNA <- train.data.tidy[, -which(colMeans(is.na(train.data.tidy)) > 0.5)]
@@ -65,7 +65,7 @@ gc()
 ```
 
 ## Analysis
-To apply cross-validation, I will use k-folds. Defining a control:
+To apply cross-validation, I will use k-folds. I will use 5 partitions, which will give one partition for validating the model and four for training the model. This should be sufficient. Defining a control:
 ``` {r control}
 set.seed(32323)
 control <- trainControl(method = "cv", number = 5)
@@ -74,13 +74,11 @@ control <- trainControl(method = "cv", number = 5)
 Start with a random forest model to train the prediction model using the k-folds control:
 ``` {r rf_mod, results = 'hide'}
 rf_mod <- train(classe ~ ., data = train.data.noNA, method="rf", trControl = control)
-gc()
 ``` 
 
-Build a gbm model for comparison:
+Build a Generalized Boosted Regression model for comparison:
 ``` {r gbm_mod_1, message = FALSE, results = 'hide'}
 gbm_mod <- train(classe ~ ., data = train.data.noNA, method="gbm", trControl = control)
-gc()
 ``` 
 
 ## Data Analysis Conclusions
