@@ -163,27 +163,28 @@ dim(train.data)</code></pre>
 <p>Looking specifically at our response variable ‘classe’, we see it is a factor.</p>
 <pre class="r"><code>str(train.data$classe)</code></pre>
 <pre><code>##  Factor w/ 5 levels &quot;A&quot;,&quot;B&quot;,&quot;C&quot;,&quot;D&quot;,..: 1 1 1 1 1 1 1 1 1 1 ...</code></pre>
-<p>Let’s also eliminate the timestamp columns, assuming that time-of-day did not influence it the excercises were done correctly, and any columns that are ‘summary’-type (i.e., average) columns.</p>
+<p>Let’s also eliminate the timestamp and name columns, assuming that time-of-day did not influence it the excercises were done correctly, and any columns that are ‘summary’-type (i.e., average) columns.</p>
 <pre class="r"><code>col_list &lt;- colnames(train.data)
-rem_col_list &lt;- col_list[ str_detect( col_list, &quot;(var|stddev|avg)&quot; ) ]
-rem_col_list &lt;- c(rem_col_list, &quot;raw_timestamp_part_1&quot;, &quot;raw_timestamp_part_2&quot;, &quot;cvtd_timestamp&quot;)
-train.data.noTOD &lt;- train.data[ !col_list %in% rem_col_list]
-rm(train.data)</code></pre>
+rem_col_list &lt;- col_list[ str_detect( col_list, &quot;(var|stddev|avg|total)&quot; ) ]
+rem_col_list &lt;- c(rem_col_list, &quot;raw_timestamp_part_1&quot;, &quot;raw_timestamp_part_2&quot;, &quot;cvtd_timestamp&quot;, &quot;user_name&quot;, &quot;X&quot;, &quot;num_window&quot;)
+train.data.noTOD &lt;- train.data[ !col_list %in% rem_col_list]</code></pre>
 <p>There are also quite a few columns that are mostly blank, so let’s eliminate those as well. Turns out they are factor columns, so I will eliminate all columns that are of type “factor” with the exception of classe.</p>
-<pre class="r"><code>use_col &lt;- NULL
+<pre class="r"><code>## dat[, -which(colMeans(is.na(dat)) &gt; 0.5)]
+use_col &lt;- NULL
 for (col_name in col_list)
 { if (is.numeric( train.data.noTOD [[ col_name ]] ) == T | is.integer ( train.data.noTOD [[ col_name ]] ) == T )
 use_col &lt;- append(col_name, use_col)}
-use_col &lt;- c(use_col, &quot;classe&quot;)
-train.data.tidy &lt;- train.data.noTOD[ , use_col]
+use_col2 &lt;- c(use_col, &quot;classe&quot;)
+train.data.tidy &lt;- train.data.noTOD[ , use_col2]</code></pre>
+<p>Columns that have more than 50% NA values are not going to give much guidance. I will eliminate them as well:</p>
+<pre class="r"><code>train.data.noNA &lt;- train.data.tidy[, -which(colMeans(is.na(train.data.tidy)) &gt; 0.5)]</code></pre>
+<p>Clean up unused data and run garbage collection:</p>
+<pre class="r"><code>rm(train.data)
 rm(train.data.noTOD)
 gc()</code></pre>
-<p>As there are NAs in several of the remaining variables, I will impute using knnInpute:</p>
-<pre class="r"><code>num_of_cols &lt;- ncol(train.data.tidy) - 1
-preProc &lt;- preProcess (train.data.tidy[ , 1 : num_of_cols ], method = &quot;knnImpute&quot;)
-train.data.noNA &lt;- predict(preProc, train.data.tidy)
-rm(train.data.tidy)
-gc()</code></pre>
+<pre><code>##           used (Mb) gc trigger  (Mb) max used  (Mb)
+## Ncells 1838877 98.3    3205452 171.2  2322722 124.1
+## Vcells 3154655 24.1   10178327  77.7 10170540  77.6</code></pre>
 </div>
 <div id="analysis" class="section level2">
 <h2>Analysis</h2>
@@ -197,14 +198,14 @@ gc()</code></pre>
 <pre class="r"><code>gbm_mod &lt;- train(classe ~ ., data = train.data.noNA, method=&quot;gbm&quot;, trControl = control)
 gc()</code></pre>
 </div>
-<div id="conclusions" class="section level2">
-<h2>Conclusions</h2>
+<div id="data-analysis-conclusions" class="section level2">
+<h2>Data Analysis Conclusions</h2>
 <p>Looking at the two models:</p>
 <pre class="r"><code>rf_mod</code></pre>
 <pre><code>## Random Forest 
 ## 
 ## 19622 samples
-##    81 predictor
+##    48 predictor
 ##     5 classes: 'A', 'B', 'C', 'D', 'E' 
 ## 
 ## No pre-processing
@@ -213,42 +214,75 @@ gc()</code></pre>
 ## Resampling results across tuning parameters:
 ## 
 ##   mtry  Accuracy   Kappa    
-##    2    0.9970950  0.9963256
-##   41    0.9998981  0.9998711
-##   81    0.9997961  0.9997421
+##    2    0.9952094  0.9939401
+##   25    0.9942920  0.9927796
+##   48    0.9884313  0.9853649
 ## 
 ## Accuracy was used to select the optimal model using  the largest value.
-## The final value used for the model was mtry = 41.</code></pre>
+## The final value used for the model was mtry = 2.</code></pre>
 <pre class="r"><code>gbm_mod</code></pre>
 <pre><code>## Stochastic Gradient Boosting 
 ## 
 ## 19622 samples
-##    81 predictor
+##    48 predictor
 ##     5 classes: 'A', 'B', 'C', 'D', 'E' 
 ## 
 ## No pre-processing
 ## Resampling: Cross-Validated (5 fold) 
-## Summary of sample sizes: 15697, 15698, 15698, 15698, 15697 
+## Summary of sample sizes: 15696, 15699, 15698, 15698, 15697 
 ## Resampling results across tuning parameters:
 ## 
 ##   interaction.depth  n.trees  Accuracy   Kappa    
-##   1                   50      0.9999490  0.9999355
-##   1                  100      0.9999490  0.9999355
-##   1                  150      0.9999490  0.9999355
-##   2                   50      0.9999490  0.9999355
-##   2                  100      0.9999490  0.9999355
-##   2                  150      0.9999490  0.9999355
-##   3                   50      0.9998981  0.9998711
-##   3                  100      0.9999490  0.9999355
-##   3                  150      0.9999490  0.9999355
+##   1                   50      0.7498729  0.6829445
+##   1                  100      0.8214757  0.7741487
+##   1                  150      0.8523080  0.8131658
+##   2                   50      0.8553152  0.8167411
+##   2                  100      0.9063802  0.8815495
+##   2                  150      0.9318111  0.9137075
+##   3                   50      0.8962388  0.8686890
+##   3                  100      0.9438892  0.9289974
+##   3                  150      0.9629493  0.9531246
 ## 
 ## Tuning parameter 'shrinkage' was held constant at a value of 0.1
 ## 
 ## Tuning parameter 'n.minobsinnode' was held constant at a value of 10
 ## Accuracy was used to select the optimal model using  the largest value.
-## The final values used for the model were n.trees = 50, interaction.depth
-##  = 1, shrinkage = 0.1 and n.minobsinnode = 10.</code></pre>
+## The final values used for the model were n.trees = 150,
+##  interaction.depth = 3, shrinkage = 0.1 and n.minobsinnode = 10.</code></pre>
 <p>I would use the random forest method for the testing data to predict the results. This is based on the better predicted performance of the random forest model than the gbm model.</p>
+</div>
+<div id="application" class="section level2">
+<h2>Application</h2>
+<p>I now need to pull in the test data and perform the same data clean up operations, and apply the model to the test data to predict the manner in which the subjects did the exercise. For sake of brevity, the r code is shown in one block, and is essentially the same clean up done for the training data.</p>
+<pre class="r"><code>test.data &lt;- read.csv('pml-testing.csv')
+test.data.noTOD &lt;- test.data[ !col_list %in% rem_col_list]
+test.data.tidy &lt;- test.data.noTOD[ , use_col]
+test.data.noNA &lt;- test.data.tidy[, -which(colMeans(is.na(train.data.tidy)) &gt; 0.5)]</code></pre>
+<p>Applying the rf_mod to the testing data:</p>
+<pre class="r"><code>predictions &lt;- predict(rf_mod, test.data.noNA)
+answers &lt;- data.frame(predictions)
+answers</code></pre>
+<pre><code>##    predictions
+## 1            B
+## 2            A
+## 3            B
+## 4            A
+## 5            A
+## 6            E
+## 7            D
+## 8            B
+## 9            A
+## 10           A
+## 11           B
+## 12           C
+## 13           B
+## 14           A
+## 15           E
+## 16           E
+## 17           A
+## 18           B
+## 19           B
+## 20           B</code></pre>
 </div>
 <div class="footnotes">
 <hr />
