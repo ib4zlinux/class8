@@ -163,14 +163,13 @@ dim(train.data)</code></pre>
 <p>Looking specifically at our response variable ‘classe’, we see it is a factor.</p>
 <pre class="r"><code>str(train.data$classe)</code></pre>
 <pre><code>##  Factor w/ 5 levels &quot;A&quot;,&quot;B&quot;,&quot;C&quot;,&quot;D&quot;,..: 1 1 1 1 1 1 1 1 1 1 ...</code></pre>
-<p>Let’s also eliminate the timestamp and name columns, assuming that time-of-day did not influence it the excercises were done correctly, and any columns that are ‘summary’-type (i.e., average) columns.</p>
+<p>Eliminate the observation id, timestamp and name columns, assuming these do not influence whether or not the excercises were done correctly, and any columns that are ‘summary’-type (i.e., average) columns.</p>
 <pre class="r"><code>col_list &lt;- colnames(train.data)
 rem_col_list &lt;- col_list[ str_detect( col_list, &quot;(var|stddev|avg|total)&quot; ) ]
 rem_col_list &lt;- c(rem_col_list, &quot;raw_timestamp_part_1&quot;, &quot;raw_timestamp_part_2&quot;, &quot;cvtd_timestamp&quot;, &quot;user_name&quot;, &quot;X&quot;, &quot;num_window&quot;)
 train.data.noTOD &lt;- train.data[ !col_list %in% rem_col_list]</code></pre>
-<p>There are also quite a few columns that are mostly blank, so let’s eliminate those as well. Turns out they are factor columns, so I will eliminate all columns that are of type “factor” with the exception of classe.</p>
-<pre class="r"><code>## dat[, -which(colMeans(is.na(dat)) &gt; 0.5)]
-use_col &lt;- NULL
+<p>Non-numeric columns are not going to assist in predicting the outcome, so I will eliminate all columns that are not of type ‘integer’ or type ‘numeric’ with the exception of classe.</p>
+<pre class="r"><code>use_col &lt;- NULL
 for (col_name in col_list)
 { if (is.numeric( train.data.noTOD [[ col_name ]] ) == T | is.integer ( train.data.noTOD [[ col_name ]] ) == T )
 use_col &lt;- append(col_name, use_col)}
@@ -183,20 +182,18 @@ train.data.tidy &lt;- train.data.noTOD[ , use_col2]</code></pre>
 rm(train.data.noTOD)
 gc()</code></pre>
 <pre><code>##           used (Mb) gc trigger  (Mb) max used  (Mb)
-## Ncells 1838877 98.3    3205452 171.2  2322722 124.1
-## Vcells 3154655 24.1   10178327  77.7 10170540  77.6</code></pre>
+## Ncells 1838663 98.2    3205452 171.2  2319428 123.9
+## Vcells 3154159 24.1   10178327  77.7 10170557  77.6</code></pre>
 </div>
 <div id="analysis" class="section level2">
 <h2>Analysis</h2>
-<p>To apply cross-validation, I will use k-folds. Defining a control:</p>
+<p>To apply cross-validation, I will use k-folds. I will use 5 partitions, which will give one partition for validating the model and four for training the model. This should be sufficient. Defining a control:</p>
 <pre class="r"><code>set.seed(32323)
 control &lt;- trainControl(method = &quot;cv&quot;, number = 5)</code></pre>
 <p>Start with a random forest model to train the prediction model using the k-folds control:</p>
-<pre class="r"><code>rf_mod &lt;- train(classe ~ ., data = train.data.noNA, method=&quot;rf&quot;, trControl = control)
-gc()</code></pre>
-<p>Build a gbm model for comparison:</p>
-<pre class="r"><code>gbm_mod &lt;- train(classe ~ ., data = train.data.noNA, method=&quot;gbm&quot;, trControl = control)
-gc()</code></pre>
+<pre class="r"><code>rf_mod &lt;- train(classe ~ ., data = train.data.noNA, method=&quot;rf&quot;, trControl = control)</code></pre>
+<p>Build a Generalized Boosted Regression model for comparison:</p>
+<pre class="r"><code>gbm_mod &lt;- train(classe ~ ., data = train.data.noNA, method=&quot;gbm&quot;, trControl = control)</code></pre>
 </div>
 <div id="data-analysis-conclusions" class="section level2">
 <h2>Data Analysis Conclusions</h2>
